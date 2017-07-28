@@ -2,7 +2,7 @@ require 'logger'
 
 main_pid = $$
 logger = Logger.new $stdout
-logger.formatter = proc do |severity, datetime, progname, msg|
+logger.formatter = proc do |_severity, datetime, _progname, msg|
   name = $$ == main_pid ? 'MAIN' : $$
   "#{datetime}: [#{name}] #{msg}\n"
 end
@@ -15,7 +15,8 @@ end
 
 array = []
 
-experiment = proc do |&blk|
+experiment = proc do |purpose, &blk|
+  logger.info "Experiment reason - #{purpose}"
   initial_memory = memory.call
   blk.call
   final = memory.call - initial_memory
@@ -23,13 +24,13 @@ experiment = proc do |&blk|
   logger.info "----End of experiment\n\n"
 end
 
-experiment.call do
+experiment.call('Start') do
   (1..5_000_000).each { |e| array << e}
 end
 
 
 fork do
-  experiment.call do
+  experiment.call('No changes') do
   logger.info "I won\'t mess up with shared memory"
   end
 end
@@ -37,8 +38,8 @@ end
 Process.wait
 
 fork do
-  experiment.call do
-    danger = array.each {|e| e }
+  experiment.call('Access elements') do
+    array.each {|e| e }
   end
 end
 
@@ -46,10 +47,9 @@ end
 Process.wait
 
 fork do
-  experiment.call do
-    danger = array.map {|e| e }
+  experiment.call('Modify elements') do
+    array.map {|e| e  * 2}
   end
 end
-
 
 Process.wait
